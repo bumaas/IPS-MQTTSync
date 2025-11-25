@@ -36,6 +36,7 @@ class MQTTSyncServer extends IPSModule
                         foreach ($Instanz['ChildrenIDs'] as $Children) {
                             if (IPS_VariableExists($Children)) {
                                 $this->RegisterMessage($Children, VM_UPDATE);
+                                $this->RegisterReference($Children);
                                 array_push($activeMessages, $Children);
                             }
                         }
@@ -43,6 +44,7 @@ class MQTTSyncServer extends IPSModule
                     case 2: //Variable
                         if (IPS_VariableExists($Instanz['ObjectID'])) {
                             $this->RegisterMessage($Instanz['ObjectID'], VM_UPDATE);
+                            $this->RegisterReference($Instanz['ObjectID']);
                             array_push($activeMessages, $Instanz['ObjectID']);
                         }
                         break;
@@ -56,6 +58,7 @@ class MQTTSyncServer extends IPSModule
             foreach ($MessageList as $key=>$Device) {
                 if (!in_array($key, $activeMessages)) {
                     $this->UnregisterMessage($key, VM_UPDATE);
+                    $this->UnregisterReference($key);
                 }
             }
         }
