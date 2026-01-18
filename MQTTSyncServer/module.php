@@ -66,57 +66,28 @@ class MQTTSyncServer extends IPSModule
         }
     }
 
-    public function MessageSink($TimeStamp, $SenderID, $Message, $Data)
+    public function MessageSink($TimeStamp, $SenderID, $Message, $Data): void
     {
         switch ($Message) {
             case VM_UPDATE:
-
                 if ($Data[1]) { // HasDiff
-                    $Topic = '';
-                    $Instanz = null;
-                    $Object = IPS_GetObject($SenderID);
-
+                    $TargetID = $SenderID;
+                    // Wenn der Sender Teil einer Instanz ist, die wir überwachen,
+                    // nehmen wir die Eltern-ID als Ziel (damit alle Kinder gesendet werden)
                     if ($this->isInstance($SenderID)) {
-                        $Topic = $this->TopicFromList($Object['ParentID']);
-                        $PObject = IPS_GetObject($Object['ParentID']);
-                        $i = 0;
-                        foreach ($PObject['ChildrenIDs'] as $Children) {
-                            if (IPS_VariableExists($Children)) {
-                                $tmpObject = IPS_GetObject($Children);
-                                $Instanz[$i]['ID'] = $tmpObject['ObjectID'];
-                                $Instanz[$i]['Name'] = $tmpObject['ObjectName'];
-                                $Instanz[$i]['ObjectIdent'] = $tmpObject['ObjectIdent'];
-                                $Instanz[$i]['VariableTyp'] = IPS_GetVariable($tmpObject['ObjectID'])['VariableType'];
-                                $Instanz[$i]['VariableAction'] = IPS_GetVariable($tmpObject['ObjectID'])['VariableAction'];
-                                $Instanz[$i]['VariableCustomAction'] = IPS_GetVariable($tmpObject['ObjectID'])['VariableAction'];
-                                $Instanz[$i]['VariableProfile'] = IPS_GetVariable($tmpObject['ObjectID'])['VariableProfile'];
-                                $Instanz[$i]['VariableCustomProfile'] = IPS_GetVariable($tmpObject['ObjectID'])['VariableCustomProfile'];
-                                $Instanz[$i]['Value'] = GetValue($tmpObject['ObjectID']);
-                                $i++;
-                            }
-                        }
-                    } else {
-                        $Topic = $this->TopicFromList($Object['ObjectID']);
-                        $Instanz[0]['ID'] = $Object['ObjectID'];
-                        $Instanz[0]['Name'] = $Object['ObjectName'];
-                        $Instanz[0]['ObjectIdent'] = $Object['ObjectIdent'];
-                        $Instanz[0]['VariableTyp'] = IPS_GetVariable($Object['ObjectID'])['VariableType'];
-                        $Instanz[0]['VariableAction'] = IPS_GetVariable($Object['ObjectID'])['VariableAction'];
-                        $Instanz[0]['VariableCustomAction'] = IPS_GetVariable($Object['ObjectID'])['VariableCustomAction'];
-                        $Instanz[0]['VariableProfile'] = IPS_GetVariable($Object['ObjectID'])['VariableProfile'];
-                        $Instanz[0]['VariableCustomProfile'] = IPS_GetVariable($Object['ObjectID'])['VariableCustomProfile'];
-                        $Instanz[0]['Value'] = GetValue($Object['ObjectID']);
+                        $TargetID = IPS_GetObject($SenderID)['ParentID'];
                     }
 
-                    if ($Instanz != null) {
-                        $Payload = json_encode($Instanz);
-                        $this->SendMQTTData($Topic, $Payload);
-                    }
-                    if ($Topic == '') {
-                        $this->SendDebug(__FUNCTION__, 'Topic for Object ID: ' . $Object['ObjectID'] . ' is not on list!', 0);
+                    $Topic = $this->TopicFromList($TargetID);
+
+                    if ($Topic != '') {
+                        $this->sendDeviceStatus($TargetID, $Topic);
+                    } else {
+                        $this->SendDebug(__FUNCTION__, 'Topic for Object ID: ' . $SenderID . ' is not on list!', 0);
                     }
                 }
-            }
+                break;
+        }
     }
 
     public function ReceiveData($JSONString)
@@ -302,40 +273,43 @@ class MQTTSyncServer extends IPSModule
         $Devices = json_decode($DevicesJSON, true, 512, JSON_THROW_ON_ERROR);
 
         foreach ($Devices as $Device) {
-
             if (!@IPS_ObjectExists($Device['ObjectID'])) {
                 $this->SendDebug(__FUNCTION__, 'Object ID: ' . $Device['ObjectID'] . ' does not exist anymore!', 0);
                 continue;
             }
 
-            $Object = IPS_GetObject($Device['ObjectID']);
-            $Topic = $Device['MQTTTopic'];
-
-            if ($Topic === '') {
-                $this->SendDebug(__FUNCTION__, 'Topic for Object ID ' . $Object['ObjectID'] . ' is empty!', 0);
+            if ($Device['MQTTTopic'] === '') {
+                $this->SendDebug(__FUNCTION__, 'Topic for Object ID ' . $Device['ObjectID'] . ' is empty!', 0);
                 continue;
             }
 
-            $this->SendDebug(__FUNCTION__, sprintf('ObjectID: %s, ObjectType: %s', $Object['ObjectID'], $Object['ObjectType']), 0);
+            $this->sendDeviceStatus($Device['ObjectID'], $Device['MQTTTopic']);
+        }
+    }
 
-            $payloadData = [];
+    /**
+     * Sendet den Status eines Gerätes (Instanz oder Einzelvariable) an MQTT
+     */
+    private function sendDeviceStatus(int $objectId, string $topic): void
+    {
+        $Object = IPS_GetObject($objectId);
+        $payloadData = [];
 
-            if ($Object['ObjectType'] === OBJECTTYPE_INSTANCE) {
-                foreach ($Object['ChildrenIDs'] as $childId) {
-                    if (!IPS_VariableExists($childId)) {
-                        continue;
-                    }
+        // Fall 1: Es ist eine Instanz (z.B. Heizung) -> Alle Kinder-Variablen holen
+        if ($Object['ObjectType'] === OBJECTTYPE_INSTANCE) {
+            foreach ($Object['ChildrenIDs'] as $childId) {
+                if (IPS_VariableExists($childId)) {
                     $payloadData[] = $this->getVariableData($childId);
                 }
             }
+        }
+        // Fall 2: Es ist direkt eine Variable -> Nur diese holen
+        elseif (IPS_VariableExists($objectId)) {
+            $payloadData[] = $this->getVariableData($objectId);
+        }
 
-            if (IPS_VariableExists($Object['ObjectID'])) {
-                $payloadData[] = $this->getVariableData($Object['ObjectID']);
-            }
-
-            if (!empty($payloadData)) {
-                $this->SendMQTTData($Topic, json_encode($payloadData, JSON_THROW_ON_ERROR));
-            }
+        if (!empty($payloadData)) {
+            $this->SendMQTTData($topic, json_encode($payloadData, JSON_THROW_ON_ERROR));
         }
     }
 
