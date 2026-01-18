@@ -14,7 +14,7 @@ class MQTTSyncServer extends IPSModule
         $this->RegisterPropertyString('Devices', '[]');
     }
 
-    public function ApplyChanges()
+    public function ApplyChanges(): void
     {
         //Never delete this line!
         parent::ApplyChanges();
@@ -32,28 +32,26 @@ class MQTTSyncServer extends IPSModule
                 $this->SendDebug(__FUNCTION__ . 'Devices', $Device->ObjectID . ' ' . $Device->MQTTTopic, 0);
                 $Instanz = IPS_GetObject($Device->ObjectID);
                 switch ($Instanz['ObjectType']) {
-                    case 1: //Object
+                    case OBJECTTYPE_INSTANCE:
                         foreach ($Instanz['ChildrenIDs'] as $Children) {
                             if (IPS_VariableExists($Children)) {
                                 $this->RegisterMessage($Children, VM_UPDATE);
-                                $this->RegisterReference($Children);
-                                array_push($activeMessages, $Children);
+                                $activeMessages[] = $Children;
                             }
                         }
                         break;
-                    case 2: //Variable
+                    case OBJECTTYPE_VARIABLE:
                         if (IPS_VariableExists($Instanz['ObjectID'])) {
-                            $this->RegisterMessage($Instanz['ObjectID'], VM_UPDATE);
-                            $this->RegisterReference($Instanz['ObjectID']);
-                            array_push($activeMessages, $Instanz['ObjectID']);
+                            $activeMessages[] = $Instanz['ObjectID'];
                         }
                         break;
-                    case 3:
+                    case OBJECTTYPE_SCRIPT:
                         $this->SendDebug(__FUNCTION__, 'Script', 0);
                         break;
                 }
+                $this->RegisterReference($Device->ObjectID);
             }
-            //Unregesiter Variablen - welche nicht mehr in der Liste vorhanden sind
+            //Unregister Variablen - welche nicht mehr in der Liste vorhanden sind
             $MessageList = $this->GetMessageList();
             foreach ($MessageList as $key=>$Device) {
                 if (!in_array($key, $activeMessages)) {
@@ -186,7 +184,7 @@ class MQTTSyncServer extends IPSModule
 
     public function sendData(string $Payload)
     {
-        $Topic = $this->Devices($_IPS['SELF']);
+        $Topic = $this->TopicFromList($this->InstanceID);
         if ($Topic != '') {
             $this->SendMQTTData($Topic, $Payload);
 

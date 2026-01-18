@@ -24,7 +24,6 @@ class MQTTSyncClientConfigurator extends IPSModule
         foreach ($Devices as $Device) {
             $instanceID = $this->getMQTTSyncClientDeviceInstance($Device->MQTTTopic);
 
-            $tmpDevice = [];
             $tmpDevice = [
                 'ObjectID'      => $Device->ObjectID,
                 'ObjectName'    => $Device->ObjectName,
@@ -53,7 +52,6 @@ class MQTTSyncClientConfigurator extends IPSModule
     {
         //Never delete this line!
         parent::ApplyChanges();
-        $this->ConnectParent('{EE0D345A-CF31-428A-A613-33CE98E752DD}');
 
         $MQTTTopic = $this->ReadPropertyString('GroupTopic');
         $this->SetReceiveDataFilter('.*' . $MQTTTopic . '.*');
