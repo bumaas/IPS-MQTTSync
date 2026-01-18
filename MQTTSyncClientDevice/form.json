@@ -12,6 +12,7 @@
         }
     ],
     "actions": [
+        {"type": "TestCenter"},
         {
             "type": "Label",
             "caption": "Spenden / Schenkung"

@@ -328,7 +328,7 @@ class MQTTSyncServer extends IPSModule
             'Value'                 => GetValue($objectId),
             'VariableTyp'           => $variable['VariableType'],
             'VariableAction'        => $variable['VariableAction'],
-            'VariableCustomAction'  => $variable['VariableAction'], // War im Original so, ggf. prüfen ob CustomAction gemeint war?
+            'VariableCustomAction'  => $variable['VariableCustomAction'],
             'VariableProfile'       => $variable['VariableProfile'],
             'VariableCustomProfile' => $variable['VariableCustomProfile'],
             'VariablePresentation'  => $variable['VariablePresentation']??null,

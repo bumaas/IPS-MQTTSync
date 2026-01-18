@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 class MQTTSyncClientDevice extends IPSModule
 {
+    private const GUID_MQTT_SEND = '{043EA491-0325-4ADD-8FC2-A30C8EEB4D3F}';
+    private const MQTT_PACKET_PUBLISH = 3;
+
     public function Create()
     {
         //Never delete this line!
@@ -36,54 +39,64 @@ class MQTTSyncClientDevice extends IPSModule
         $this->SendDebug('ReceiveData JSON', $JSONString, 0);
         $Data = json_decode($JSONString);
 
-        //Für MQTT Fix in IPS Version 6.3
-        if (IPS_GetKernelDate() > 1670886000) {
-            $Data->Payload = utf8_decode($Data->Payload);
-        }
+        // Fix für IPS 6.3 encoding
+        $this->ensureUtf8Payload($Data);
 
         if (!property_exists($Data, 'Topic')) {
             return;
         }
 
-        $Variablen = json_decode($Data->Payload);
+        $Variablen = json_decode($Data->Payload, true, 512, JSON_THROW_ON_ERROR);
 
         foreach ($Variablen as $Variable) {
-            if ($Variable->ObjectIdent == '') {
-                $ObjectIdent = $Variable->ID;
-            } else {
-                $ObjectIdent = $Variable->ObjectIdent;
-            }
+            $this->processReceivedVariable($Variable);
+        }
+    }
 
-            if ($Variable->VariableCustomProfile != '') {
-                $VariableProfile = $Variable->VariableCustomProfile;
-            } else {
-                $VariableProfile = $Variable->VariableProfile;
-            }
-            $ID = $this->GetIDForIdent($ObjectIdent);
-            if (!$ID) {
-                switch ($Variable->VariableTyp) {
-                    case VARIABLETYPE_BOOLEAN:
-                        $this->RegisterVariableBoolean($ObjectIdent, $Variable->Name, $VariableProfile);
-                        break;
-                    case VARIABLETYPE_INTEGER:
-                        $this->RegisterVariableInteger($ObjectIdent, $Variable->Name, $VariableProfile);
-                        break;
-                    case VARIABLETYPE_FLOAT:
-                        $this->RegisterVariableFloat($ObjectIdent, $Variable->Name, $VariableProfile);
-                        break;
-                    case VARIABLETYPE_STRING:
-                        $this->RegisterVariableString($ObjectIdent, $Variable->Name, $VariableProfile);
-                        break;
-                    default:
-                        IPS_LogMessage('MQTTSync Client', 'invalid variablen profile');
-                        break;
-                }
-                if ($Variable->VariableAction != 0 || $Variable->VariableCustomAction != 0) {
-                    $this->EnableAction($ObjectIdent);
-                }
-            }
-            $this->SendDebug('Value for ' . $ObjectIdent . ':', $Variable->Value, 0);
-            $this->SetValue($ObjectIdent, $Variable->Value);
+    private function processReceivedVariable(array $Variable): void
+    {
+        $ident = ($Variable['ObjectIdent'] !== '') ? $Variable['ObjectIdent'] : $Variable['ID'];
+        $name = (string) $Variable['Name'];
+
+        $profileOrPresentation = $this->determineProfileOrPresentation($Variable);
+
+        $this->MaintainVariable($ident, $name, $Variable['VariableTyp'], $profileOrPresentation, 0, true);
+
+        if ((isset($Variable['VariableAction']) && $Variable['VariableAction'] !== 0) || (isset($Variable['VariableCustomAction']) && $Variable['VariableCustomAction'] > 1)) {
+            $this->EnableAction($ident);
+        } else {
+            $this->DisableAction($ident);
+        }
+
+        $this->SendDebug('Value for ' . $ident . ':', $Variable['Value'], 0);
+        $this->SetValue($ident, $Variable['Value']);
+    }
+
+    private function determineProfileOrPresentation (array $Variable)
+    {
+        // Priorität 1: Custom Presentation
+        if (isset($Variable['VariableCustomPresentation']) && $Variable['VariableCustomPresentation'] !== '') {
+            return (array) $Variable['VariableCustomPresentation'];
+        }
+
+        // Priorität 2: Standard Presentation
+        if (isset($Variable['VariablePresentation']) && $Variable['VariablePresentation'] !== '') {
+            return (array) $Variable['VariablePresentation'];
+        }
+
+        // Priorität 3: Custom Profil oder Standard Profil
+        if ($Variable['VariableCustomProfile'] !== '') {
+            return (string) $Variable['VariableCustomProfile'];
+        }
+
+        return (string) $Variable['VariableProfile'];
+    }
+
+    private function ensureUtf8Payload(object $Data): void
+    {
+        // Für MQTT Fix in IPS Version 6.3 (Kernel Date > 12.12.2022)
+        if (IPS_GetKernelDate() > 1670886000) {
+            $Data->Payload = utf8_decode($Data->Payload);
         }
     }
 
@@ -98,14 +111,18 @@ class MQTTSyncClientDevice extends IPSModule
 
     protected function sendMQTTCommand($topic, $payload, $retain = false)
     {
-        $Data['DataID'] = '{043EA491-0325-4ADD-8FC2-A30C8EEB4D3F}';
-        $Data['PacketType'] = 3;
-        $Data['QualityOfService'] = 0;
-        $Data['Retain'] = $retain;
-        $Data['Topic'] = $topic;
-        $Data['Payload'] = json_encode($payload);
-        $DataJSON = json_encode($Data, JSON_UNESCAPED_SLASHES);
-        $this->SendDebug(__FUNCTION__ . 'MQTT Publish', $DataJSON, 0);
-        $resultServer = $this->SendDataToParent($DataJSON);
+        $data = [
+            'DataID'           => self::GUID_MQTT_SEND,
+            'PacketType'       => self::MQTT_PACKET_PUBLISH,
+            'QualityOfService' => 0,
+            'Retain'           => $retain,
+            'Topic'            => $topic,
+            'Payload'          => json_encode($payload),
+        ];
+
+        $dataJSON = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+
+        $this->SendDebug(__FUNCTION__ , 'dataJSON: ' . $dataJSON, 0);
+        $this->SendDataToParent($dataJSON);
     }
 }
