@@ -1,10 +1,10 @@
-<?php
+<?php /** @noinspection AutoloadingIssuesInspection */
 
 declare(strict_types=1);
 
 class MQTTSyncClientConfigurator extends IPSModule
 {
-    public function Create()
+    public function Create(): void
     {
         //Never delete this line!
         parent::Create();
@@ -13,7 +13,7 @@ class MQTTSyncClientConfigurator extends IPSModule
         $this->RegisterAttributeString('Devices', '[]');
     }
 
-    public function GetConfigurationForm()
+    public function GetConfigurationForm(): string
     {
         $Form = json_decode(file_get_contents(__DIR__ . '/form.json'), true);
         $Devices = $this->ReadAttributeString('Devices');
@@ -48,7 +48,7 @@ class MQTTSyncClientConfigurator extends IPSModule
         return json_encode($Form);
     }
 
-    public function ApplyChanges()
+    public function ApplyChanges(): void
     {
         //Never delete this line!
         parent::ApplyChanges();
@@ -57,7 +57,7 @@ class MQTTSyncClientConfigurator extends IPSModule
         $this->SetReceiveDataFilter('.*' . $MQTTTopic . '.*');
     }
 
-    public function ReceiveData($JSONString)
+    public function ReceiveData($JSONString): string
     {
         $this->SendDebug('ReceiveData JSON', $JSONString, 0);
         $Data = json_decode($JSONString);
@@ -96,6 +96,7 @@ class MQTTSyncClientConfigurator extends IPSModule
                 }
             }
         }
+        return '';
     }
 
     private function getMQTTSyncClientDeviceInstance($Topic)

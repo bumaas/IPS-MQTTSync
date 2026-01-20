@@ -1,4 +1,4 @@
-<?php
+<?php /** @noinspection AutoloadingIssuesInspection */
 
 declare(strict_types=1);
 
@@ -7,7 +7,7 @@ class MQTTSyncClientDevice extends IPSModule
     private const GUID_MQTT_SEND = '{043EA491-0325-4ADD-8FC2-A30C8EEB4D3F}';
     private const MQTT_PACKET_PUBLISH = 3;
 
-    public function Create()
+    public function Create(): void
     {
         //Never delete this line!
         parent::Create();
@@ -16,7 +16,7 @@ class MQTTSyncClientDevice extends IPSModule
         $this->RegisterPropertyString('GroupTopic', '');
     }
 
-    public function ApplyChanges()
+    public function ApplyChanges(): void
     {
         //Never delete this line!
         parent::ApplyChanges();
@@ -34,7 +34,7 @@ class MQTTSyncClientDevice extends IPSModule
         }
     }
 
-    public function ReceiveData($JSONString)
+    public function ReceiveData($JSONString): string
     {
         $this->SendDebug('ReceiveData JSON', $JSONString, 0);
         $Data = json_decode($JSONString);
@@ -43,7 +43,7 @@ class MQTTSyncClientDevice extends IPSModule
         $this->ensureUtf8Payload($Data);
 
         if (!property_exists($Data, 'Topic')) {
-            return;
+            return '';
         }
 
         $Variablen = json_decode($Data->Payload, true, 512, JSON_THROW_ON_ERROR);
@@ -51,6 +51,7 @@ class MQTTSyncClientDevice extends IPSModule
         foreach ($Variablen as $Variable) {
             $this->processReceivedVariable($Variable);
         }
+        return '';
     }
 
     private function processReceivedVariable(array $Variable): void
@@ -100,7 +101,7 @@ class MQTTSyncClientDevice extends IPSModule
         }
     }
 
-    public function RequestAction($Ident, $Value)
+    public function RequestAction($Ident, $Value): void
     {
         $Payload = [];
         $Payload['ObjectIdent'] = $Ident;

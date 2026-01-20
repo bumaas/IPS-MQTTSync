@@ -1,4 +1,4 @@
-<?php
+<?php /** @noinspection AutoloadingIssuesInspection */
 
 declare(strict_types=1);
 
@@ -8,7 +8,7 @@ class MQTTSyncServer extends IPSModule
     private const GUID_MQTT_SEND = '{043EA491-0325-4ADD-8FC2-A30C8EEB4D3F}';
     private const MQTT_PACKET_PUBLISH = 3;
 
-    public function Create()
+    public function Create(): void
     {
         //Never delete this line!
         parent::Create();
@@ -90,7 +90,7 @@ class MQTTSyncServer extends IPSModule
         }
     }
 
-    public function ReceiveData($JSONString)
+    public function ReceiveData($JSONString): string
     {
         $this->SendDebug('ReceiveData JSON', $JSONString, 0);
         $Data = json_decode($JSONString);
@@ -122,7 +122,7 @@ class MQTTSyncServer extends IPSModule
                 } else {
                     SetValue($VariablenID, $Payload->Value);
                 }
-                return;
+                return '';
             }
 
             if ($Topic == 'get') {
@@ -135,7 +135,7 @@ class MQTTSyncServer extends IPSModule
                         $this->SendDebug(__FUNCTION__, 'Invalid get Payload: ' . $Payload->config, 0);
                         break;
                 }
-                return;
+                return '';
             }
 
             $this->SendDebug(__FUNCTION__ . ' Topic', $Topic, 0);
@@ -155,6 +155,7 @@ class MQTTSyncServer extends IPSModule
                 }
             }
         }
+        return '';
     }
 
     public function sendData(string $Payload)
@@ -333,7 +334,9 @@ class MQTTSyncServer extends IPSModule
             'VariableCustomProfile' => $variable['VariableCustomProfile'],
             'VariablePresentation'  => $variable['VariablePresentation']??null,
             'VariableCustomPresentation' => $variable['VariableCustomPresentation']??null
-        ]);
+        ], function ($value) {
+            return !is_null($value);
+        });
     }
 
     private function SendMQTTData(string $topic, string $payload): void
